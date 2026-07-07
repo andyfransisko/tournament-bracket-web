@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tournament Bracket Builder</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3350;
+    --accent: #6c63ff;
+    --accent2: #a78bfa;
+    --win: #22c55e;
+    --lose: #64748b;
+    --text: #e2e8f0;
+    --text-muted: #8892b0;
+    --danger: #ef4444;
+    --gold: #fbbf24;
+    --radius: 8px;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  header h1 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent2), var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -0.02em;
+  }
+
+  header .trophy { font-size: 1.4rem; }
+
+  .main-layout {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 280px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+  }
+
+  .sidebar label {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+
+  textarea#participants {
+    width: 100%;
+    height: 180px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.9rem;
+    padding: 10px;
+    resize: vertical;
+    transition: border-color 0.2s;
+    outline: none;
+  }
+
+  textarea#participants:focus {
+    border-color: var(--accent);
+  }
+
+  textarea#participants::placeholder {
+    color: var(--text-muted);
+  }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    cursor: pointer;
+    user-select: none;
+    transition: border-color 0.2s;
+  }
+
+  .toggle-row:hover { border-color: var(--accent); }
+
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+
+  .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+
+  .toggle-track {
+    position: absolute; inset: 0;
+    background: var(--border);
+    border-radius: 99px;
+    transition: background 0.2s;
+    cursor: pointer;
+  }
+
+  .toggle-track::after {
+    content: '';
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 16px; height: 16px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s;
+  }
+
+  .toggle-switch input:checked + .toggle-track { background: var(--accent); }
+  .toggle-switch input:checked + .toggle-track::after { transform: translateX(16px); }
+
+  .toggle-label { font-size: 0.88rem; color: var(--text); }
+
+  .btn {
+    width: 100%;
+    padding: 11px 16px;
+    border: none;
+    border-radius: var(--radius);
+    font-family: inherit;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: filter 0.15s, transform 0.1s;
+    letter-spacing: 0.01em;
+  }
+
+  .btn:hover { filter: brightness(1.12); }
+  .btn:active { transform: scale(0.98); }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), #4f46e5);
+    color: #fff;
+  }
+
+  .btn-danger {
+    background: var(--surface2);
+    color: var(--danger);
+    border: 1px solid var(--border);
+  }
+
+  .btn-danger:hover { background: rgba(239,68,68,0.15); border-color: var(--danger); }
+
+  .error-msg {
+    background: rgba(239,68,68,0.12);
+    border: 1px solid rgba(239,68,68,0.4);
+    color: #fca5a5;
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    font-size: 0.85rem;
+    display: none;
+  }
+
+  .error-msg.visible { display: block; }
+
+  /* BRACKET AREA */
+  .bracket-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  /* CHAMPION BANNER */
+  #champion-banner {
+    display: none;
+    background: linear-gradient(135deg, #78350f, #451a03);
+    border-bottom: 2px solid var(--gold);
+    padding: 16px 24px;
+    text-align: center;
+    animation: champIn 0.5s ease;
+    flex-shrink: 0;
+  }
+
+  #champion-banner.visible { display: block; }
+
+  @keyframes champIn {
+    from { opacity: 0; transform: translateY(-12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  #champion-banner .champ-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--gold);
+    margin-bottom: 4px;
+  }
+
+  #champion-banner .champ-name {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #fef3c7;
+    letter-spacing: -0.02em;
+  }
+
+  #champion-banner .champ-crown { font-size: 1.8rem; }
+
+  /* EMPTY STATE */
+  #empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--text-muted);
+    padding: 40px;
+    text-align: center;
+  }
+
+  #empty-state .empty-icon { font-size: 3rem; opacity: 0.4; }
+  #empty-state p { font-size: 1rem; opacity: 0.7; }
+
+  /* BRACKET SCROLL CONTAINER */
+  #bracket-container {
+    flex: 1;
+    overflow: auto;
+    padding: 24px;
+    display: none;
+  }
+
+  #bracket-container.visible { display: block; }
+
+  /* BRACKET */
+  .bracket {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 0;
+    min-width: max-content;
+  }
+
+  .round-col {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  .round-header {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 0 12px 12px;
+  }
+
+  .round-matches {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+
+  /* Each match wrapper handles vertical centering within its slot */
+  .match-slot {
+    display: flex;
+    align-items: center;
+    position: relative;
+  }
+
+  /* Connector lines */
+  .connector {
+    width: 24px;
+    flex-shrink: 0;
+    align-self: stretch;
+    position: relative;
+  }
+
+  /* Right connector from match */
+  .connector-right {
+    width: 20px;
+    flex-shrink: 0;
+    align-self: stretch;
+    position: relative;
+  }
+
+  .connector-right::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* Left connector into next round */
+  .match-slot .left-line {
+    position: absolute;
+    left: -24px;
+    width: 24px;
+    top: 0; bottom: 0;
+    pointer-events: none;
+  }
+
+  .match-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    min-width: 200px;
+    max-width: 240px;
+    transition: border-color 0.2s;
+    flex-shrink: 0;
+  }
+
+  .match-card:hover { border-color: var(--accent2); }
+
+  .competitor {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    transition: background 0.15s;
+    position: relative;
+  }
+
+  .competitor:first-child {
+    border-bottom: 1px solid var(--border);
+  }
+
+  .competitor.winner {
+    background: rgba(34,197,94,0.12);
+  }
+
+  .competitor.loser {
+    opacity: 0.5;
+  }
+
+  .competitor.bye {
+    opacity: 0.35;
+    font-style: italic;
+  }
+
+  .comp-name {
+    flex: 1;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .competitor.winner .comp-name {
+    color: #86efac;
+    font-weight: 700;
+  }
+
+  .competitor.loser .comp-name { color: var(--lose); }
+
+  .score-input {
+    width: 44px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.85rem;
+    text-align: center;
+    padding: 3px 4px;
+    outline: none;
+    transition: border-color 0.2s;
+    flex-shrink: 0;
+  }
+
+  .score-input:focus { border-color: var(--accent); }
+
+  .score-input:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .win-marker {
+    font-size: 0.75rem;
+    color: var(--win);
+    flex-shrink: 0;
+    opacity: 0;
+  }
+
+  .competitor.winner .win-marker { opacity: 1; }
+
+  /* TBD placeholder competitor */
+  .comp-tbd {
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 0.82rem;
+  }
+
+  /* Bracket connector SVG lines */
+  .round-gap {
+    width: 40px;
+    flex-shrink: 0;
+    position: relative;
+    align-self: stretch;
+  }
+
+  /* Champion round special styling */
+  .round-col.final .match-card {
+    border-color: var(--gold);
+    box-shadow: 0 0 16px rgba(251,191,36,0.15);
+  }
+
+  /* Responsive: sidebar collapses on small viewports */
+  @media (max-width: 600px) {
+    .main-layout { flex-direction: column; }
+    .sidebar {
+      width: 100%;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+    #bracket-container { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="trophy">🏆</span>
+  <h1>Tournament Bracket Builder</h1>
+</header>
+
+<div class="main-layout">
+  <!-- SETUP SIDEBAR -->
+  <aside class="sidebar">
+    <div>
+      <label for="participants">Participants <span style="color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0">(one per line)</span></label>
+      <textarea id="participants" placeholder="Alice&#10;Bob&#10;Charlie&#10;Diana&#10;..."></textarea>
+    </div>
+
+    <label for="shuffle-toggle" class="toggle-row" style="margin-bottom:0">
+      <span class="toggle-switch">
+        <input type="checkbox" id="shuffle-toggle">
+        <span class="toggle-track"></span>
+      </span>
+      <span class="toggle-label">Shuffle draw (random seeding)</span>
+    </label>
+
+    <div id="error-msg" class="error-msg"></div>
+
+    <button class="btn btn-primary" id="generate-btn">Generate Bracket</button>
+    <button class="btn btn-danger" id="clear-btn">Clear / Reset</button>
+  </aside>
+
+  <!-- BRACKET CONTENT -->
+  <div class="bracket-area">
+    <div id="champion-banner">
+      <div class="champ-label">&#127942; Champion</div>
+      <div class="champ-crown">👑</div>
+      <div class="champ-name" id="champ-name-text"></div>
+    </div>
+
+    <div id="empty-state">
+      <div class="empty-icon">🎯</div>
+      <p>Enter participants and click <strong>Generate Bracket</strong> to begin.</p>
+    </div>
+
+    <div id="bracket-container">
+      <div class="bracket" id="bracket"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== STATE ===== */
+const STORAGE_KEY = 'tournament_v1';
+let state = null; // { participants, shuffled, rounds }
+// rounds: array of arrays of matches
+// match: { id, p1: {name, score}, p2: {name, score}, winner: name|null }
+
+/* ===== UTILS ===== */
+function nextPow2(n) {
+  let p = 1;
+  while (p < n) p *= 2;
+  return p;
+}
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function saveState() {
+  if (state) localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  else localStorage.removeItem(STORAGE_KEY);
+}
+
+function loadState() {
+  try {
+    const s = localStorage.getItem(STORAGE_KEY);
+    if (s) state = JSON.parse(s);
+  } catch(e) { state = null; }
+}
+
+/* ===== BRACKET GENERATION ===== */
+function generateBracket(names, doShuffle) {
+  const ordered = doShuffle ? shuffle(names) : [...names];
+  const size = nextPow2(ordered.length);
+  // Pad with BYE
+  while (ordered.length < size) ordered.push(null);
+
+  const rounds = [];
+  let matchId = 0;
+
+  // Round 1: pair participants
+  const firstRound = [];
+  for (let i = 0; i < size; i += 2) {
+    const p1name = ordered[i];
+    const p2name = ordered[i + 1];
+    const isBye = p2name === null || p1name === null;
+    const match = {
+      id: matchId++,
+      p1: { name: p1name, score: '' },
+      p2: { name: p2name, score: '' },
+      winner: null
+    };
+    if (isBye) {
+      // Auto-advance the real participant
+      match.winner = p1name !== null ? p1name : p2name;
+    }
+    firstRound.push(match);
+  }
+  rounds.push(firstRound);
+
+  // Build subsequent rounds from previous
+  let prevRound = firstRound;
+  while (prevRound.length > 1) {
+    const nextRound = [];
+    for (let i = 0; i < prevRound.length; i += 2) {
+      const m1 = prevRound[i];
+      const m2 = prevRound[i + 1];
+      const match = {
+        id: matchId++,
+        p1: { name: m1.winner || null, score: '' },
+        p2: { name: m2.winner || null, score: '' },
+        winner: null
+      };
+      nextRound.push(match);
+    }
+    rounds.push(nextRound);
+    prevRound = nextRound;
+  }
+
+  return rounds;
+}
+
+/* ===== SCORE / ADVANCE LOGIC ===== */
+function resolveMatch(match) {
+  const s1 = match.p1.score === '' ? null : parseFloat(match.p1.score);
+  const s2 = match.p2.score === '' ? null : parseFloat(match.p2.score);
+  if (s1 === null || s2 === null || isNaN(s1) || isNaN(s2)) { match.winner = null; return; }
+  if (s1 === s2) { match.winner = null; return; }
+  match.winner = s1 > s2 ? match.p1.name : match.p2.name;
+}
+
+function propagateWinners() {
+  for (let r = 0; r < state.rounds.length - 1; r++) {
+    const cur = state.rounds[r];
+    const next = state.rounds[r + 1];
+    for (let i = 0; i < cur.length; i += 2) {
+      const m1 = cur[i];
+      const m2 = cur[i + 1];
+      const nextMatch = next[Math.floor(i / 2)];
+      const newP1 = m1.winner || null;
+      const newP2 = m2.winner || null;
+      if (nextMatch.p1.name !== newP1) {
+        nextMatch.p1 = { name: newP1, score: '' };
+        nextMatch.winner = null;
+      }
+      if (nextMatch.p2.name !== newP2) {
+        nextMatch.p2 = { name: newP2, score: '' };
+        nextMatch.winner = null;
+      }
+      // Re-resolve if both are populated
+      if (nextMatch.p1.name && nextMatch.p2.name) {
+        resolveMatch(nextMatch);
+      } else {
+        nextMatch.winner = null;
+      }
+    }
+  }
+}
+
+function getChampion() {
+  const lastRound = state.rounds[state.rounds.length - 1];
+  if (!lastRound || lastRound.length === 0) return null;
+  return lastRound[0].winner || null;
+}
+
+/* ===== RENDER ===== */
+function renderBracket() {
+  const container = document.getElementById('bracket');
+  container.innerHTML = '';
+
+  const rounds = state.rounds;
+  const totalRounds = rounds.length;
+
+  // For spacing: match slot height = 100px, gap between matches in a round
+  // Round r has 2^(totalRounds-r-1) matches
+  const BASE_MATCH_H = 80; // px per match card
+  const BASE_GAP = 16;     // gap at round 0
+
+  rounds.forEach((round, rIdx) => {
+    const isFinal = rIdx === totalRounds - 1;
+    const colDiv = document.createElement('div');
+    colDiv.className = 'round-col' + (isFinal ? ' final' : '');
+    colDiv.style.display = 'flex';
+    colDiv.style.flexDirection = 'column';
+
+    // Round label
+    const label = document.createElement('div');
+    label.className = 'round-header';
+    if (isFinal) label.textContent = 'Final';
+    else if (rIdx === totalRounds - 2) label.textContent = 'Semifinal';
+    else label.textContent = 'Round ' + (rIdx + 1);
+    colDiv.appendChild(label);
+
+    // Matches wrapper
+    const matchesDiv = document.createElement('div');
+    matchesDiv.className = 'round-matches';
+    matchesDiv.style.display = 'flex';
+    matchesDiv.style.flexDirection = 'column';
+
+    // Each match occupies a "slot" whose height = (slotH of round r)
+    // slotH(r) = BASE_MATCH_H * 2^r + gap * (2^r - 1)
+    // We use margin-top/bottom to center the match within its slot
+    const matchCount = round.length;
+
+    round.forEach((match, mIdx) => {
+      const slotDiv = document.createElement('div');
+      slotDiv.className = 'match-slot';
+      slotDiv.style.display = 'flex';
+      slotDiv.style.alignItems = 'center';
+      slotDiv.style.position = 'relative';
+
+      // Vertical padding to center match within its slot
+      const slotHeight = computeSlotHeight(rIdx, BASE_MATCH_H, BASE_GAP);
+      slotDiv.style.height = slotHeight + 'px';
+
+      const matchCard = buildMatchCard(match, rIdx);
+      slotDiv.appendChild(matchCard);
+
+      // Right connector line (horizontal stub to the gap column)
+      if (!isFinal) {
+        const rightStub = document.createElement('div');
+        rightStub.style.cssText = `
+          width: 20px; flex-shrink: 0; height: 1px; background: var(--border);
+          align-self: center;
+        `;
+        slotDiv.appendChild(rightStub);
+      }
+
+      matchesDiv.appendChild(slotDiv);
+    });
+
+    colDiv.appendChild(matchesDiv);
+    container.appendChild(colDiv);
+
+    // Add connector column between rounds (except after last)
+    if (!isFinal) {
+      const gapCol = buildConnectorColumn(rIdx, round.length, BASE_MATCH_H, BASE_GAP, totalRounds);
+      container.appendChild(gapCol);
+    }
+  });
+
+  // Update champion
+  updateChampionBanner();
+}
+
+function computeSlotHeight(roundIdx, baseH, baseGap) {
+  // Round 0: each match gets baseH + baseGap
+  // Round 1: each match gets 2*(baseH + baseGap)
+  // Round r: 2^r * (baseH + baseGap)
+  return Math.pow(2, roundIdx) * (baseH + baseGap);
+}
+
+function buildConnectorColumn(rIdx, matchCount, baseH, baseGap, totalRounds) {
+  // This column draws the bracket connectors between round rIdx and rIdx+1
+  const col = document.createElement('div');
+  col.style.cssText = 'position:relative; display:flex; flex-direction:column;';
+
+  const slotH = computeSlotHeight(rIdx, baseH, baseGap);
+  const nextSlotH = computeSlotHeight(rIdx + 1, baseH, baseGap);
+
+  // Label spacer (matches round-header height ~28px)
+  const labelSpacer = document.createElement('div');
+  labelSpacer.style.height = '28px';
+  col.appendChild(labelSpacer);
+
+  // For each pair of matches, draw a connector bracket
+  for (let i = 0; i < matchCount; i += 2) {
+    const pair = document.createElement('div');
+    pair.style.cssText = `
+      position: relative;
+      height: ${2 * slotH}px;
+      width: 20px;
+      flex-shrink: 0;
+    `;
+
+    // Top half vertical line (from top match center down to midpoint)
+    const topLine = document.createElement('div');
+    topLine.style.cssText = `
+      position: absolute;
+      left: 0;
+      top: ${slotH / 2}px;
+      height: ${slotH / 2}px;
+      width: 1px;
+      background: var(--border);
+    `;
+    pair.appendChild(topLine);
+
+    // Bottom half vertical line (from midpoint down to bottom match center)
+    const botLine = document.createElement('div');
+    botLine.style.cssText = `
+      position: absolute;
+      left: 0;
+      top: ${slotH}px;
+      height: ${slotH / 2}px;
+      width: 1px;
+      background: var(--border);
+    `;
+    pair.appendChild(botLine);
+
+    // Horizontal line to next round
+    const hLine = document.createElement('div');
+    hLine.style.cssText = `
+      position: absolute;
+      left: 0;
+      top: ${slotH - 0.5}px;
+      width: 100%;
+      height: 1px;
+      background: var(--border);
+    `;
+    pair.appendChild(hLine);
+
+    col.appendChild(pair);
+  }
+
+  return col;
+}
+
+function buildMatchCard(match, roundIdx) {
+  const card = document.createElement('div');
+  card.className = 'match-card';
+
+  [1, 2].forEach(pNum => {
+    const p = match['p' + pNum];
+    const isWinner = match.winner && match.winner === p.name;
+    const isLoser = match.winner && match.winner !== p.name && p.name;
+    const isBye = p.name === null;
+
+    const row = document.createElement('div');
+    let cls = 'competitor';
+    if (isBye) cls += ' bye';
+    else if (isWinner) cls += ' winner';
+    else if (isLoser) cls += ' loser';
+    row.className = cls;
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'comp-name';
+    if (isBye) nameSpan.textContent = 'BYE';
+    else if (!p.name) {
+      nameSpan.classList.add('comp-tbd');
+      nameSpan.textContent = 'TBD';
+    } else {
+      nameSpan.textContent = p.name;
+    }
+    row.appendChild(nameSpan);
+
+    // Score input (only if both participants are real and known)
+    const scoreInput = document.createElement('input');
+    scoreInput.type = 'number';
+    scoreInput.className = 'score-input';
+    scoreInput.placeholder = '0';
+    scoreInput.value = p.score;
+    scoreInput.min = '0';
+
+    const bothReal = match.p1.name && match.p2.name;
+    scoreInput.disabled = !bothReal || isBye || !p.name;
+
+    if (!isBye && p.name) {
+      scoreInput.addEventListener('change', () => {
+        match['p' + pNum].score = scoreInput.value;
+        resolveMatch(match);
+        propagateWinners();
+        saveState();
+        renderBracket();
+      });
+      row.appendChild(scoreInput);
+    }
+
+    // Win marker
+    const marker = document.createElement('span');
+    marker.className = 'win-marker';
+    marker.textContent = '✓';
+    row.appendChild(marker);
+
+    card.appendChild(row);
+  });
+
+  return card;
+}
+
+function updateChampionBanner() {
+  const champ = getChampion();
+  const banner = document.getElementById('champion-banner');
+  const nameEl = document.getElementById('champ-name-text');
+  if (champ) {
+    nameEl.textContent = champ;
+    banner.classList.add('visible');
+  } else {
+    banner.classList.remove('visible');
+  }
+}
+
+/* ===== UI STATE ===== */
+function showBracket() {
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('bracket-container').classList.add('visible');
+}
+
+function showEmpty() {
+  document.getElementById('empty-state').style.display = '';
+  document.getElementById('bracket-container').classList.remove('visible');
+  document.getElementById('champion-banner').classList.remove('visible');
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = msg;
+  el.classList.add('visible');
+}
+
+function clearError() {
+  document.getElementById('error-msg').classList.remove('visible');
+}
+
+function restoreUI() {
+  if (!state) { showEmpty(); return; }
+  // Restore textarea
+  document.getElementById('participants').value = state.participants.join('\n');
+  document.getElementById('shuffle-toggle').checked = state.shuffled;
+  showBracket();
+  renderBracket();
+}
+
+/* ===== EVENT HANDLERS ===== */
+document.getElementById('generate-btn').addEventListener('click', () => {
+  clearError();
+  const raw = document.getElementById('participants').value;
+  const names = raw.split('\n').map(s => s.trim()).filter(Boolean);
+  if (names.length < 2) {
+    showError('Enter at least 2 participants to generate a bracket.');
+    return;
+  }
+  const doShuffle = document.getElementById('shuffle-toggle').checked;
+  state = {
+    participants: names,
+    shuffled: doShuffle,
+    rounds: generateBracket(names, doShuffle)
+  };
+  saveState();
+  showBracket();
+  renderBracket();
+});
+
+document.getElementById('clear-btn').addEventListener('click', () => {
+  state = null;
+  saveState();
+  document.getElementById('participants').value = '';
+  document.getElementById('shuffle-toggle').checked = false;
+  clearError();
+  showEmpty();
+});
+
+/* ===== INIT ===== */
+loadState();
+restoreUI();
+</script>
+</body>
+</html>

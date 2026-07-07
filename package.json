@@ -1,0 +1,15 @@
+{
+  "name": "browser-v2-bracket",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Client-side single-elimination tournament bracket builder (vendored, debranded) served as static files.",
+  "license": "MIT",
+  "scripts": {
+    "build": "node -e \"const fs=require('fs');const h='index.html';if(!fs.existsSync(h))throw new Error('missing index.html entry point');if(fs.readFileSync(h,'utf8').length<200)throw new Error('index.html looks empty');console.log('build ok: static app')\"",
+    "verify:build": "npm run build",
+    "start": "serve -s . -l tcp://0.0.0.0:3000"
+  },
+  "devDependencies": {
+    "serve": "14.2.4"
+  }
+}
